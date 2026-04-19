@@ -210,21 +210,21 @@ function generateDiffPage(
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-      background: #0d1117;
-      color: #c9d1d9;
+      background: #ffffff;
+      color: #24292f;
       line-height: 1.6;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
     .header {
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
+      background: #f6f8fa;
+      border-bottom: 1px solid #d0d7de;
       padding: 1rem 2rem;
     }
     .header h1 {
       font-size: 1.25rem;
-      color: #f0f6fc;
+      color: #1f2328;
       margin-bottom: 0.5rem;
     }
     .meta {
@@ -232,7 +232,7 @@ function generateDiffPage(
       gap: 1rem;
       flex-wrap: wrap;
       font-size: 0.875rem;
-      color: #8b949e;
+      color: #656d76;
     }
     .meta span {
       display: flex;
@@ -240,7 +240,7 @@ function generateDiffPage(
       gap: 0.25rem;
     }
     .badge {
-      background: #238636;
+      background: #2da44e;
       color: white;
       padding: 0.125rem 0.5rem;
       border-radius: 0.75rem;
@@ -254,8 +254,8 @@ function generateDiffPage(
       width: 100%;
     }
     .info {
-      background: #21262d;
-      border: 1px solid #30363d;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
       border-radius: 0.5rem;
       padding: 1rem;
       margin-bottom: 1rem;
@@ -266,62 +266,120 @@ function generateDiffPage(
       gap: 0.5rem;
     }
     .expires {
-      color: #f85149;
+      color: #cf222e;
       font-size: 0.875rem;
     }
     .diff-wrapper {
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: #ffffff;
+      border: 1px solid #d0d7de;
       border-radius: 0.5rem;
       overflow: hidden;
     }
-    /* Override diff2html styles for dark theme */
+    /* Override diff2html styles for light theme */
     .d2h-wrapper {
-      background: #0d1117;
+      background: #ffffff;
     }
     .d2h-file-header {
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
+      background: #f6f8fa;
+      border-bottom: 1px solid #d0d7de;
     }
     .d2h-file-name {
-      color: #c9d1d9;
+      color: #24292f;
     }
+    
+    /* Side-by-side mode background */
+    .d2h-side-by-side {
+      background: #ffffff;
+    }
+    .d2h-side-by-side .d2h-code-side {
+      background: #ffffff;
+    }
+    .d2h-side-by-side .d2h-code-wrapper {
+      background: #ffffff;
+    }
+    
+    /* Left panel (original) background */
+    .d2h-side-by-side .d2h-code-side:first-child {
+      background: #ffffff;
+    }
+    
+    /* Right panel (modified) background */
+    .d2h-side-by-side .d2h-code-side:last-child {
+      background: #ffffff;
+    }
+    
+    /* Table cells in side-by-side mode */
+    .d2h-side-by-side td {
+      background: #ffffff;
+      color: #24292f;
+    }
+    
+    /* Code lines */
     .d2h-code-line {
-      color: #c9d1d9;
+      color: #24292f;
+      background: transparent;
     }
     .d2h-code-side-line {
-      color: #c9d1d9;
+      color: #24292f;
+      background: transparent;
     }
+    
+    /* Line numbers */
+    .d2h-code-linenumber {
+      background: #f6f8fa;
+      color: #656d76;
+      border-right: 1px solid #d0d7de;
+    }
+    
+    /* Info rows */
     .d2h-info {
-      background: #0d1117;
-      color: #8b949e;
+      background: #ffffff;
+      color: #656d76;
     }
+    
+    /* Deleted lines - light red background */
     .d2h-del {
-      background-color: rgba(248, 81, 73, 0.1);
+      background-color: rgba(255, 200, 200, 0.4);
     }
+    .d2h-del .d2h-code-linenumber {
+      background-color: rgba(255, 200, 200, 0.6);
+      border-right-color: rgba(207, 34, 46, 0.4);
+    }
+    
+    /* Inserted lines - light green background */
     .d2h-ins {
-      background-color: rgba(35, 134, 54, 0.1);
+      background-color: rgba(200, 255, 200, 0.4);
     }
+    .d2h-ins .d2h-code-linenumber {
+      background-color: rgba(200, 255, 200, 0.6);
+      border-right-color: rgba(45, 164, 78, 0.4);
+    }
+    
+    /* Inline changes */
     .d2h-code-line del,
     .d2h-code-side-line del {
-      background-color: rgba(248, 81, 73, 0.3);
+      background-color: rgba(255, 150, 150, 0.6);
     }
     .d2h-code-line ins,
     .d2h-code-side-line ins {
-      background-color: rgba(35, 134, 54, 0.3);
+      background-color: rgba(150, 255, 150, 0.6);
     }
+    
+    /* File wrapper */
     .d2h-file-wrapper {
-      border: 1px solid #30363d;
+      border: 1px solid #d0d7de;
       border-radius: 0.375rem;
       margin-bottom: 1rem;
+      background: #ffffff;
     }
+    
     .d2h-file-collapse {
       display: none;
     }
     .view-toggle {
-      background: #21262d;
-      border: 1px solid #30363d;
-      color: #c9d1d9;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      color: #24292f;
       padding: 0.5rem 1rem;
       border-radius: 0.375rem;
       cursor: pointer;
@@ -329,15 +387,15 @@ function generateDiffPage(
       margin-bottom: 1rem;
     }
     .view-toggle:hover {
-      background: #30363d;
+      background: #e8ecf1;
     }
     .footer {
       text-align: center;
       padding: 1rem;
-      color: #8b949e;
+      color: #656d76;
       font-size: 0.875rem;
-      background: #161b22;
-      border-top: 1px solid #30363d;
+      background: #f6f8fa;
+      border-top: 1px solid #d0d7de;
     }
     .footer a {
       color: #58a6ff;
@@ -374,7 +432,7 @@ function generateDiffPage(
     <button class="view-toggle" onclick="toggleView()">切换视图 (Side-by-side / Line-by-line)</button>
 
     <div id="diff-container" class="diff-wrapper">
-      <div style="padding: 2rem; text-align: center; color: #8b949e;">加载 diff...</div>
+      <div style="padding: 2rem; text-align: center; color: #656d76;">加载 diff...</div>
     </div>
   </div>
 

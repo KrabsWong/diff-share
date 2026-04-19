@@ -315,10 +315,121 @@ curl -X POST https://your-worker.workers.dev/api/regenerate \
 
 **Note**: This works because we store the original diff content in D1, allowing us to re-render with updated templates anytime.
 
-## License
+## For AI Agent Users
 
-MIT
+If you're using an AI coding assistant (like OpenCode, Cursor, GitHub Copilot, etc.), you can teach your agent to automatically share diffs for you.
 
-## Author
+### Quick Setup for AI Agents
 
-KrabsWong
+Add this to your project's `AGENTS.md` or tell your AI assistant:
+
+```markdown
+## Sharing Diffs with diff-share
+
+This project uses diff-share to generate shareable links for git diffs.
+
+**CLI Location**: `./packages/cli/dist/cli.js` (from project root)
+**API URL**: `https://diff-share-worker.yooooo.workers.dev`
+
+### Available Commands
+
+- Share working directory changes: `./packages/cli/dist/cli.js`
+- Share specific commit: `./packages/cli/dist/cli.js --commit <hash>`
+- Share commit range: `./packages/cli/dist/cli.js --from <hash> --to <hash>`
+- Share staged changes: `./packages/cli/dist/cli.js --staged`
+- Compare with base branch: `./packages/cli/dist/cli.js --base main`
+
+### Environment Variables
+
+Set this in your environment or .env file:
+```
+export DIFF_SHARE_API_URL=https://diff-share-worker.yooooo.workers.dev
+```
+
+### Example Natural Language Instructions
+
+When you want to share a diff, say:
+- "Share my current changes"
+- "Generate a link for the last commit"
+- "Create a diff link comparing this branch with main"
+- "Share the staged changes"
+
+The AI will automatically run the appropriate CLI command and return the shareable link.
+```
+
+### Example AI Instructions
+
+Here are examples of what you can tell your AI agent:
+
+| What you say | What the AI does |
+|--------------|------------------|
+| "Share my current changes" | Runs `./packages/cli/dist/cli.js` and returns the link |
+| "Show me the diff of commit abc123" | Runs `./packages/cli/dist/cli.js --commit abc123` |
+| "Compare this with main branch" | Runs `./packages/cli/dist/cli.js --base main` |
+| "Share what I've staged" | Runs `./packages/cli/dist/cli.js --staged` |
+| "Create a diff link for the last 3 commits" | Runs `./packages/cli/dist/cli.js --from HEAD~3` |
+
+### One-Line Setup (Copy-Paste)
+
+Add this function to your shell profile for instant AI integration:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+share-diff() {
+  local cli_path="./packages/cli/dist/cli.js"
+  local api_url="https://diff-share-worker.yooooo.workers.dev"
+  
+  if [[ ! -f "$cli_path" ]]; then
+    echo "Error: CLI not found at $cli_path"
+    echo "Make sure you're in the project root and have built the CLI: bun run build"
+    return 1
+  fi
+  
+  DIFF_SHARE_API_URL="$api_url" "$cli_path" "$@"
+}
+
+# Now you can tell your AI: "Run share-diff to share my changes"
+```
+
+### AI Agent Configuration Files
+
+#### For OpenCode (AGENTS.md)
+
+Create an `AGENTS.md` in your project root:
+
+```markdown
+# Diff Sharing
+
+To share git diffs with team members, use the diff-share CLI tool.
+
+**Tool Location**: `packages/cli/dist/cli.js`
+
+**Prerequisites**:
+- CLI must be built: `cd packages/cli && bun run build`
+- API URL is set: `export DIFF_SHARE_API_URL=https://diff-share-worker.yooooo.workers.dev`
+
+**Usage Patterns**:
+1. Current changes: `./packages/cli/dist/cli.js`
+2. Specific commit: `./packages/cli/dist/cli.js --commit <hash>`
+3. Commit range: `./packages/cli/dist/cli.js --from <hash> --to <hash>`
+4. Staged only: `./packages/cli/dist/cli.js --staged`
+
+**Output**: The CLI returns a shareable URL like `https://pub-xxx.r2.dev/a1b2c3d4.html`
+
+Always share the returned link with the user when they ask to share diffs.
+```
+
+#### For Cursor (.cursorrules)
+
+Add to your `.cursorrules` file:
+
+```
+When the user asks to "share" or "generate a link for" their git changes:
+1. Check if packages/cli/dist/cli.js exists
+2. If not, remind the user to build it: cd packages/cli && bun run build
+3. Run the appropriate diff-share command based on context
+4. Return the generated URL to the user
+
+Common patterns:
+- "share my changes" → ./packages/cli/dist/cli.js
+- 
