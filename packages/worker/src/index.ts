@@ -138,20 +138,24 @@ function generatePublicUrl(_requestUrl: string, hash: string, env: Env): string 
 }
 
 function generateDiffPage(
-  request: DiffUploadRequest, 
-  hash: string, 
-  createdAt: Date, 
+  request: DiffUploadRequest,
+  hash: string,
+  createdAt: Date,
   expireAt: Date
 ): string {
   const { diff, mode, metadata } = request;
   const title = metadata?.title || getDefaultTitle(mode, request.source);
-  
+  // Escape diff content for safe insertion into JavaScript string
+  const escapedDiff = JSON.stringify(diff);
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} - Diff Share</title>
+  <!-- diff2html CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/css/diff2html.min.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -159,6 +163,9 @@ function generateDiffPage(
       background: #0d1117;
       color: #c9d1d9;
       line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       background: #161b22;
@@ -190,66 +197,104 @@ function generateDiffPage(
       font-size: 0.75rem;
     }
     .container {
-      max-width: 1200px;
+      flex: 1;
+      max-width: 100%;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 1rem;
+      width: 100%;
     }
     .info {
       background: #21262d;
       border: 1px solid #30363d;
       border-radius: 0.5rem;
       padding: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .info-row {
+      margin-bottom: 1rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
     .expires {
       color: #f85149;
       font-size: 0.875rem;
     }
-    .diff-container {
-      background: #161b22;
+    .diff-wrapper {
+      background: #0d1117;
       border: 1px solid #30363d;
       border-radius: 0.5rem;
       overflow: hidden;
     }
-    .diff-header {
-      background: #21262d;
-      padding: 0.75rem 1rem;
+    /* Override diff2html styles for dark theme */
+    .d2h-wrapper {
+      background: #0d1117;
+    }
+    .d2h-file-header {
+      background: #161b22;
       border-bottom: 1px solid #30363d;
-      font-size: 0.875rem;
+    }
+    .d2h-file-name {
+      color: #c9d1d9;
+    }
+    .d2h-code-line {
+      color: #c9d1d9;
+    }
+    .d2h-code-side-line {
+      color: #c9d1d9;
+    }
+    .d2h-info {
+      background: #0d1117;
       color: #8b949e;
     }
-    .diff-content {
-      padding: 1rem;
-      overflow-x: auto;
+    .d2h-del {
+      background-color: rgba(248, 81, 73, 0.1);
     }
-    .diff-line {
-      font-family: 'SF Mono', Monaco, monospace;
+    .d2h-ins {
+      background-color: rgba(35, 134, 54, 0.1);
+    }
+    .d2h-code-line del,
+    .d2h-code-side-line del {
+      background-color: rgba(248, 81, 73, 0.3);
+    }
+    .d2h-code-line ins,
+    .d2h-code-side-line ins {
+      background-color: rgba(35, 134, 54, 0.3);
+    }
+    .d2h-file-wrapper {
+      border: 1px solid #30363d;
+      border-radius: 0.375rem;
+      margin-bottom: 1rem;
+    }
+    .d2h-file-collapse {
+      display: none;
+    }
+    .view-toggle {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
       font-size: 0.875rem;
-      line-height: 1.5;
-      white-space: pre;
-      padding: 0 0.5rem;
+      margin-bottom: 1rem;
     }
-    .diff-add { background: rgba(35, 134, 54, 0.2); color: #3fb950; }
-    .diff-del { background: rgba(248, 81, 73, 0.2); color: #f85149; }
-    .diff-info { color: #8b949e; }
-    .diff-hunk { color: #58a6ff; }
+    .view-toggle:hover {
+      background: #30363d;
+    }
     .footer {
       text-align: center;
-      padding: 2rem;
+      padding: 1rem;
       color: #8b949e;
       font-size: 0.875rem;
+      background: #161b22;
+      border-top: 1px solid #30363d;
     }
     .footer a {
       color: #58a6ff;
       text-decoration: none;
     }
     @media (max-width: 768px) {
-      .container { padding: 1rem; }
+      .container { padding: 0.5rem; }
       .header { padding: 1rem; }
       .meta { flex-direction: column; gap: 0.5rem; }
     }
@@ -264,32 +309,60 @@ function generateDiffPage(
       ${metadata?.branch ? `<span>🌿 ${escapeHtml(metadata.branch)}</span>` : ''}
     </div>
   </header>
-  
+
   <div class="container">
     <div class="info">
-      <div class="info-row">
-        <div>
-          <strong>Hash:</strong> <code>${hash}</code>
-          <br>
-          <strong>Created:</strong> ${createdAt.toLocaleString()}
-        </div>
-        <div class="expires">
-          ⏰ Expires: ${expireAt.toLocaleString()}
-        </div>
+      <div>
+        <strong>Hash:</strong> <code>${hash}</code>
+        <span style="margin-left: 1rem;"><strong>Created:</strong> ${createdAt.toLocaleString()}</span>
+      </div>
+      <div class="expires">
+        ⏰ Expires: ${expireAt.toLocaleString()}
       </div>
     </div>
-    
-    <div class="diff-container">
-      <div class="diff-header">Diff Content</div>
-      <div class="diff-content">
-        ${formatDiff(diff)}
-      </div>
+
+    <button class="view-toggle" onclick="toggleView()">切换视图 (Side-by-side / Line-by-line)</button>
+
+    <div id="diff-container" class="diff-wrapper">
+      <div style="padding: 2rem; text-align: center; color: #8b949e;">加载 diff...</div>
     </div>
   </div>
-  
+
   <footer class="footer">
     Generated by <a href="https://github.com/KrabsWong/diff-share">Diff Share</a>
   </footer>
+
+  <!-- diff2html JS -->
+  <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui.min.js"></script>
+  <script>
+    const diffString = ${escapedDiff};
+    let currentOutputFormat = 'side-by-side';
+
+    function renderDiff() {
+      const targetElement = document.getElementById('diff-container');
+      const configuration = {
+        drawFileList: true,
+        matching: 'lines',
+        matchWordsThreshold: 0.25,
+        maxLineSizeInBlockForComparison: 200,
+        outputFormat: currentOutputFormat,
+        synchronisedScroll: true,
+        highlight: true,
+        renderNothingWhenEmpty: false
+      };
+
+      const diff2htmlUi = new Diff2HtmlUI(targetElement, diffString, configuration);
+      diff2htmlUi.draw();
+    }
+
+    function toggleView() {
+      currentOutputFormat = currentOutputFormat === 'side-by-side' ? 'line-by-line' : 'side-by-side';
+      renderDiff();
+    }
+
+    // Initial render
+    renderDiff();
+  </script>
 </body>
 </html>`;
 }
