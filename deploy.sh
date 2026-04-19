@@ -46,8 +46,10 @@ echo ""
 
 # Check if already logged in
 echo "Step 3: Checking Cloudflare authentication..."
-if ! wrangler whoami &> /dev/null; then
-    echo "Please login to Cloudflare..."
+WRANGLER_WHOAMI=$(wrangler whoami 2>&1 || true)
+
+if echo "$WRANGLER_WHOAMI" | grep -q "Not logged in"; then
+    echo "Not logged in. Please login to Cloudflare..."
     wrangler login
 else
     echo -e "${GREEN}✓ Already logged in${NC}"
