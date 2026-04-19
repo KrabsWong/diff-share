@@ -44,7 +44,7 @@ flowchart TB
     HTML -->|3. Upload static file| R2
 
     Worker -->|4. Return CDN URL| CLI
-    Browser -->|5. GET /{hash}.html| R2
+    Browser -->|"5. GET /hash.html"| R2
 ```
 
 ### Data Flow
