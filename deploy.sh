@@ -112,6 +112,11 @@ else
     echo -e "${YELLOW}Database 'diff-share-db' already exists${NC}"
     echo "If you need to recreate it, delete it first from Cloudflare Dashboard"
 fi
+
+# Wait for D1 database to be ready
+echo ""
+echo "Waiting for D1 database to be ready..."
+sleep 5
 echo ""
 
 # Create R2 bucket
@@ -159,8 +164,36 @@ echo ""
 
 # Initialize database schema
 echo "Step 8: Initializing database schema..."
-wrangler d1 execute diff-share-db --file=./schema.sql
-echo -e "${GREEN}✓ Database schema initialized${NC}"
+echo "This will execute SQL on the REMOTE database..."
+
+# Try to execute on remote database
+if ! wrangler d1 execute diff-share-db --file=./schema.sql --remote 2>&1 | tee /tmp/db_execute.log; then
+    echo ""
+    echo -e "${YELLOW}⚠ Remote database execution may have failed.${NC}"
+    echo "This can happen if:"
+    echo "  - D1 database is still being created (wait a minute and retry)"
+    echo "  - You need to re-authenticate (run: wrangler login)"
+    echo ""
+    read -p "Retry database initialization? (y/n): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        wrangler d1 execute diff-share-db --file=./schema.sql --remote
+    else
+        echo -e "${YELLOW}⚠ Skipping database initialization.${NC}"
+        echo "You can manually run it later with:"
+        echo "  wrangler d1 execute diff-share-db --file=./schema.sql --remote"
+    fi
+fi
+
+# Verify database tables exist
+echo "Verifying database tables..."
+if wrangler d1 execute diff-share-db --command="SELECT name FROM sqlite_master WHERE type='table' AND name='diffs';" --remote 2>/dev/null | grep -q "diffs"; then
+    echo -e "${GREEN}✓ Database schema verified${NC}"
+else
+    echo -e "${YELLOW}⚠ Could not verify database tables${NC}"
+    echo "You may need to manually run:"
+    echo "  wrangler d1 execute diff-share-db --file=./schema.sql --remote"
+fi
 echo ""
 
 # Deploy Worker
