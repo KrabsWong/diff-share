@@ -155,8 +155,8 @@ if [ "$MODE" = "full" ] || [ "$MODE" = "init" ]; then
         wrangler d1 create diff-share-db 2>&1 | tee /tmp/d1_output.txt
 
         # Extract database ID
-        DATABASE_ID=$(grep -oP 'database_id: "\K[^"]+' /tmp/d1_output.txt || \
-                       grep -oP '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/d1_output.txt | head -1 || \
+        DATABASE_ID=$(grep -oE 'database_id: "[^"]+' /tmp/d1_output.txt | sed 's/database_id: "//' || \
+                       grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' /tmp/d1_output.txt | head -1 || \
                        echo "")
 
         if [ -n "$DATABASE_ID" ]; then
@@ -198,7 +198,7 @@ if [ "$MODE" = "full" ] || [ "$MODE" = "init" ]; then
     else
         # Try to auto-detect from wrangler
         R2_INFO=$(wrangler r2 bucket info diff-share-files 2>&1 || echo "")
-        R2_URL=$(echo "$R2_INFO" | grep -oP 'https://pub-[a-zA-Z0-9]+\.r2\.dev' | head -1 || echo "")
+        R2_URL=$(echo "$R2_INFO" | grep -oE 'https://pub-[a-zA-Z0-9]+\.r2\.dev' | head -1 || echo "")
         
         if [ -z "$R2_URL" ]; then
             echo -e "${YELLOW}⚠ Could not auto-detect R2 URL${NC}"
@@ -308,13 +308,13 @@ DEPLOY_OUTPUT=$(wrangler deploy 2>&1)
 echo "$DEPLOY_OUTPUT"
 
 # Extract Worker URL
-WORKER_URL=$(echo "$DEPLOY_OUTPUT" | grep -oP 'https://[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.workers\.dev' | head -1 || echo "")
+    WORKER_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.workers\.dev' | head -1 || echo "")
 
 if [ -n "$WORKER_URL" ]; then
     echo ""
     echo -e "${GREEN}✓ Worker deployed: $WORKER_URL${NC}"
 else
-    WORKER_URL="$(grep -oP 'https://[a-zA-Z0-9_-]+\.workers\.dev' <<< "$DEPLOY_OUTPUT" | head -1 || echo "")"
+        WORKER_URL="$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[a-zA-Z0-9_-]+\.workers\.dev' | head -1 || echo "")"
     if [ -z "$WORKER_URL" ]; then
         WORKER_URL="https://diff-share-worker.<account>.workers.dev"
     fi
