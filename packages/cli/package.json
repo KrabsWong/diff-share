@@ -1,0 +1,21 @@
+{
+  "name": "@diff-share/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "diff-share": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outfile=dist/cli.js --target=node",
+    "dev": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "bun-types": "latest",
+    "typescript": "^5.0.0"
+  }
+}

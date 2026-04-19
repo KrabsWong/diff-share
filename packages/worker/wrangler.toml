@@ -1,0 +1,22 @@
+name = "diff-share-worker"
+main = "src/index.ts"
+compatibility_date = "2024-04-19"
+
+[vars]
+ENVIRONMENT = "production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "diff-share-db"
+database_id = ""  # To be filled after creation
+
+[[r2_buckets]]
+binding = "DIFF_BUCKET"
+bucket_name = "diff-share-files"
+
+[triggers]
+crons = ["0 */6 * * *"]  # Run cleanup every 6 hours
+
+# For local development
+[env.dev.vars]
+ENVIRONMENT = "development"
