@@ -169,33 +169,35 @@ diff-share/
 ```bash
 git clone git@github.com:KrabsWong/diff-share.git
 cd diff-share
-
-# One-command deployment
-./deploy.sh
 ```
 
-The script will automatically:
-- Check and install dependencies (wrangler, bun)
-- Login to Cloudflare (opens browser)
-- Create D1 database and R2 bucket
-- Initialize database schema
-- Deploy Worker
-- Build CLI
+#### First Time Deployment (Full Setup)
+
+```bash
+# Create D1, R2, init database, deploy Worker, build CLI
+./deploy.sh --full
+```
+
+#### Quick Update (Code Changes Only)
+
+```bash
+# Just redeploy Worker and rebuild CLI
+./deploy.sh
+
+# Or only update Worker (fastest)
+./deploy.sh --worker-only
+```
+
+**Deploy Script Options:**
+- `./deploy.sh` - Quick update (Worker + CLI) **← Use this for updates**
+- `./deploy.sh --full` - First time setup (D1 + R2 + schema + deploy)
+- `./deploy.sh --init` - Initialize infrastructure only (no deploy)
+- `./deploy.sh --worker-only` - Deploy only Worker
+- `./deploy.sh --help` - Show all options
 
 After deployment, you'll get your Worker URL (e.g., `https://diff-share-worker.xxx.workers.dev`).
 
-### 2. Build CLI
-
-```bash
-cd packages/cli
-
-# Build the CLI
-bun run build
-
-# The CLI binary is now at: ./dist/cli.js
-```
-
-### 3. Use CLI
+### 2. Use CLI
 
 ```bash
 # Set your API URL (replace with your actual Worker URL)
