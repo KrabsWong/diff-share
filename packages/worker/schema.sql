@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS diffs (
   mode TEXT NOT NULL,  -- 'working', 'commit', 'range', 'base', 'staged'
   title TEXT,
   repo_name TEXT,
-  branch TEXT
+  branch TEXT,
+  diff_content TEXT NOT NULL  -- Original diff content for regeneration
 );
 
 -- Index for cleanup queries

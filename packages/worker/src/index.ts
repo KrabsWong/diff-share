@@ -7,6 +7,7 @@ export interface Env {
   DIFF_BUCKET: R2Bucket;
   ENVIRONMENT: string;
   R2_PUBLIC_URL: string;
+  REGENERATE_TOKEN?: string;  // Optional token for authentication
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -61,10 +62,10 @@ app.post('/api/upload', async (c) => {
       },
     });
 
-    // Store metadata in D1
+    // Store metadata and diff content in D1
     await c.env.DB.prepare(`
-      INSERT INTO diffs (hash, created_at, expire_at, mode, title, repo_name, branch)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO diffs (hash, created_at, expire_at, mode, title, repo_name, branch, diff_content)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       hash,
       now.toISOString(),
@@ -72,7 +73,8 @@ app.post('/api/upload', async (c) => {
       body.mode,
       body.metadata?.title || null,
       body.metadata?.repoName || null,
-      body.metadata?.branch || null
+      body.metadata?.branch || null,
+      body.diff
     ).run();
 
     // Generate URL
@@ -105,6 +107,54 @@ app.post('/api/cleanup', async (c) => {
   } catch (error) {
     console.error('Cleanup error:', error);
     return c.json({ success: false, error: String(error) }, 500);
+  }
+});
+
+// Regenerate HTML endpoint - useful after deploying new templates
+app.post('/api/regenerate', async (c) => {
+  try {
+    // Simple token authentication (optional)
+    const authHeader = c.req.header('Authorization');
+    const expectedToken = c.env.REGENERATE_TOKEN;
+    
+    if (expectedToken) {
+      const providedToken = authHeader?.replace('Bearer ', '');
+      if (providedToken !== expectedToken) {
+        return c.json({ 
+          success: false, 
+          error: 'Unauthorized. Set REGENERATE_TOKEN in wrangler.toml and provide it as Bearer token.' 
+        }, 401);
+      }
+    }
+
+    const body = await c.req.json<{ hash?: string; all?: boolean }>();
+    
+    if (body.hash) {
+      // Regenerate single diff
+      const result = await regenerateSingle(c.env, body.hash);
+      return c.json(result);
+    } else if (body.all) {
+      // Regenerate all unexpired diffs
+      const results = await regenerateAll(c.env);
+      return c.json({
+        success: true,
+        total: results.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+        details: results
+      });
+    } else {
+      return c.json({
+        success: false,
+        error: 'Please provide either "hash" to regenerate a specific diff, or "all: true" to regenerate all unexpired diffs'
+      }, 400);
+    }
+  } catch (error) {
+    console.error('Regenerate error:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }, 500);
   }
 });
 
@@ -428,4 +478,88 @@ async function cleanupExpired(env: Env): Promise<number> {
 
   console.log(`Cleaned up ${results.length} expired diffs`);
   return results.length;
+}
+
+// Regenerate a single diff's HTML
+async function regenerateSingle(env: Env, hash: string): Promise<{ success: boolean; hash: string; error?: string }> {
+  try {
+    // Fetch diff data from D1
+    const row = await env.DB.prepare(`
+      SELECT hash, created_at, expire_at, mode, title, repo_name, branch, diff_content
+      FROM diffs
+      WHERE hash = ? AND expire_at > datetime('now')
+    `).bind(hash).first<{
+      hash: string;
+      created_at: string;
+      expire_at: string;
+      mode: string;
+      title: string | null;
+      repo_name: string | null;
+      branch: string | null;
+      diff_content: string;
+    }>();
+
+    if (!row) {
+      return { success: false, hash, error: 'Diff not found or expired' };
+    }
+
+    // Reconstruct request object
+    const request: DiffUploadRequest = {
+      diff: row.diff_content,
+      mode: row.mode as DiffUploadRequest['mode'],
+      metadata: {
+        title: row.title || undefined,
+        repoName: row.repo_name || undefined,
+        branch: row.branch || undefined
+      }
+    };
+
+    // Regenerate HTML
+    const html = generateDiffPage(
+      request,
+      row.hash,
+      new Date(row.created_at),
+      new Date(row.expire_at)
+    );
+
+    // Upload to R2
+    await env.DIFF_BUCKET.put(`${hash}.html`, html, {
+      httpMetadata: {
+        contentType: 'text/html',
+      },
+    });
+
+    console.log(`Regenerated HTML for hash: ${hash}`);
+    return { success: true, hash };
+  } catch (error) {
+    console.error(`Failed to regenerate ${hash}:`, error);
+    return { 
+      success: false, 
+      hash, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+// Regenerate all unexpired diffs
+async function regenerateAll(env: Env): Promise<Array<{ success: boolean; hash: string; error?: string }>> {
+  // Query all unexpired diffs
+  const { results } = await env.DB.prepare(`
+    SELECT hash FROM diffs WHERE expire_at > datetime('now')
+  `).all<{ hash: string }>();
+
+  if (!results || results.length === 0) {
+    return [];
+  }
+
+  const results_array: Array<{ success: boolean; hash: string; error?: string }> = [];
+  
+  // Process sequentially to avoid overwhelming the system
+  for (const { hash } of results) {
+    const result = await regenerateSingle(env, hash);
+    results_array.push(result);
+  }
+
+  console.log(`Regenerated ${results_array.filter(r => r.success).length}/${results_array.length} diffs`);
+  return results_array;
 }

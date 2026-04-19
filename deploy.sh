@@ -12,6 +12,7 @@ set -e  # Exit on error
 # Parse arguments
 MODE="quick"
 WORKER_ONLY=false
+MIGRATE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -27,6 +28,10 @@ while [[ $# -gt 0 ]]; do
       WORKER_ONLY=true
       shift
       ;;
+    --migrate)
+      MIGRATE=true
+      shift
+      ;;
     --help|-h)
       echo "Diff Share Deployment Script"
       echo ""
@@ -36,12 +41,14 @@ while [[ $# -gt 0 ]]; do
       echo "  (no args)      Quick update - deploy Worker and CLI only (default)"
       echo "  --full         Full deployment - create D1, R2, init schema, deploy"
       echo "  --init         Initialize only - create D1, R2, init schema (no deploy)"
+      echo "  --migrate      Migrate database schema (for schema updates)"
       echo "  --worker-only  Deploy only the Worker (skip CLI build)"
       echo "  --help, -h     Show this help message"
       echo ""
       echo "Examples:"
       echo "  ./deploy.sh              # Quick update after code changes"
       echo "  ./deploy.sh --full       # First time deployment"
+      echo "  ./deploy.sh --migrate    # Update database schema only"
       echo "  ./deploy.sh --worker-only # Only update Worker code"
       exit 0
       ;;
@@ -55,7 +62,13 @@ done
 
 echo "=================================="
 echo "Diff Share - Deployment Script"
-echo "Mode: $MODE"
+if [ "$MIGRATE" = true ]; then
+    echo "Mode: migrate"
+elif [ "$WORKER_ONLY" = true ]; then
+    echo "Mode: worker-only"
+else
+    echo "Mode: $MODE"
+fi
 echo "=================================="
 echo ""
 
@@ -173,23 +186,34 @@ if [ "$MODE" = "full" ] || [ "$MODE" = "init" ]; then
     fi
     echo ""
 
-    # Get R2 public URL
+    # Get R2 public URL - first check if already configured
     echo "Configuring R2 public URL..."
-    R2_INFO=$(wrangler r2 bucket info diff-share-files 2>&1 || echo "")
-    R2_URL=$(echo "$R2_INFO" | grep -oP 'https://pub-[a-zA-Z0-9]+\.r2\.dev' | head -1 || echo "")
-
-    if [ -z "$R2_URL" ]; then
-        echo -e "${YELLOW}⚠ Could not auto-detect R2 URL${NC}"
-        read -p "Enter your R2 public URL (e.g., https://pub-xxx.r2.dev): " R2_URL
-    fi
-
+    
+    # Check if R2_PUBLIC_URL is already set in wrangler.toml (not the placeholder)
+    CURRENT_R2_URL=$(grep "R2_PUBLIC_URL" wrangler.toml | grep -v "^#" | cut -d'"' -f2 || echo "")
+    
+    if [ -n "$CURRENT_R2_URL" ] && [ "$CURRENT_R2_URL" != "https://pub-xxxxxxxx.r2.dev" ]; then
+        echo -e "${GREEN}✓ R2 URL already configured: $CURRENT_R2_URL${NC}"
+        R2_URL="$CURRENT_R2_URL"
+    else
+        # Try to auto-detect from wrangler
+        R2_INFO=$(wrangler r2 bucket info diff-share-files 2>&1 || echo "")
+        R2_URL=$(echo "$R2_INFO" | grep -oP 'https://pub-[a-zA-Z0-9]+\.r2\.dev' | head -1 || echo "")
+        
+        if [ -z "$R2_URL" ]; then
+            echo -e "${YELLOW}⚠ Could not auto-detect R2 URL${NC}"
+            read -p "Enter your R2 public URL (e.g., https://pub-xxx.r2.dev): " R2_URL
+        fi
+        
     if [ -n "$R2_URL" ]; then
+        # Replace any existing R2_PUBLIC_URL value with the new one
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|R2_PUBLIC_URL = \"https://pub-xxxxxxxx.r2.dev\"|R2_PUBLIC_URL = \"$R2_URL\"|" wrangler.toml
+            sed -i '' "s|R2_PUBLIC_URL = \"[^\"]*\"|R2_PUBLIC_URL = \"$R2_URL\"|" wrangler.toml
         else
-            sed -i "s|R2_PUBLIC_URL = \"https://pub-xxxxxxxx.r2.dev\"|R2_PUBLIC_URL = \"$R2_URL\"|" wrangler.toml
+            sed -i "s|R2_PUBLIC_URL = \"[^\"]*\"|R2_PUBLIC_URL = \"$R2_URL\"|" wrangler.toml
         fi
         echo -e "${GREEN}✓ R2 URL configured: $R2_URL${NC}"
+    fi
     fi
     echo ""
 
@@ -219,6 +243,56 @@ if [ "$MODE" = "full" ] || [ "$MODE" = "init" ]; then
         echo "  2. Run './deploy.sh' to deploy Worker"
         exit 0
     fi
+fi
+
+# ============================================================================
+# SCHEMA MIGRATION - Only in --migrate mode
+# ============================================================================
+
+if [ "$MIGRATE" = true ]; then
+    echo -e "${BLUE}=== Database Migration ===${NC}"
+    echo ""
+    
+    # Check if we should use migration file or schema file
+    if [ -f "schema-migration.sql" ]; then
+        echo "Found schema-migration.sql"
+        read -p "Use migration file (preserves data) or full schema (recreates)? (migration/schema): " MIGRATION_TYPE
+        
+        if [ "$MIGRATION_TYPE" = "schema" ]; then
+            SQL_FILE="./schema.sql"
+            echo -e "${YELLOW}⚠ Using schema.sql will reset all data!${NC}"
+            read -p "Are you sure? (y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "Migration cancelled."
+                exit 0
+            fi
+        else
+            SQL_FILE="./schema-migration.sql"
+        fi
+    else
+        SQL_FILE="./schema.sql"
+    fi
+    
+    echo "Executing: $SQL_FILE"
+    if ! wrangler d1 execute diff-share-db --file="$SQL_FILE" --remote 2>&1; then
+        echo ""
+        echo -e "${YELLOW}⚠ Migration may have failed.${NC}"
+        echo "If D1 is still initializing, wait 30 seconds and retry."
+        read -p "Retry? (y/n): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            wrangler d1 execute diff-share-db --file="$SQL_FILE" --remote
+        fi
+    else
+        echo -e "${GREEN}✓ Database schema migrated${NC}"
+    fi
+    echo ""
+    
+    echo -e "${GREEN}=== Migration Complete ===${NC}"
+    echo ""
+    echo "Next: Run './deploy.sh' to deploy the updated Worker"
+    exit 0
 fi
 
 # ============================================================================

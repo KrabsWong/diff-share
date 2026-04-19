@@ -7,6 +7,8 @@ ENVIRONMENT = "production"
 # After creating R2 bucket, get the public URL from: wrangler r2 bucket info diff-share-files
 # Or Cloudflare Dashboard → R2 → diff-share-files → Settings → R2.dev subdomain
 R2_PUBLIC_URL = "https://pub-xxxxxxxx.r2.dev"  # TODO: Replace with your actual R2 dev URL
+# Optional: Set a token to protect the /api/regenerate endpoint
+# REGENERATE_TOKEN = "your-secret-token-here"
 
 [[d1_databases]]
 binding = "DB"

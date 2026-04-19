@@ -275,6 +275,46 @@ export default {
 };
 ```
 
+## HTML Regeneration (After Deployment Updates)
+
+After deploying new Worker code (especially when updating the HTML template), you may want to regenerate existing diff pages to apply the new styles/features:
+
+### Regenerate Single Diff
+
+```bash
+curl -X POST https://your-worker.workers.dev/api/regenerate \
+  -H "Content-Type: application/json" \
+  -d '{"hash": "a3f7b2c8d9e1f5a2"}'
+```
+
+### Regenerate All Unexpired Diffs
+
+```bash
+curl -X POST https://your-worker.workers.dev/api/regenerate \
+  -H "Content-Type: application/json" \
+  -d '{"all": true}'
+```
+
+### With Authentication (Optional)
+
+To protect the endpoint, set `REGENERATE_TOKEN` in your `wrangler.toml`:
+
+```toml
+[vars]
+REGENERATE_TOKEN = "your-secret-token"
+```
+
+Then include it in requests:
+
+```bash
+curl -X POST https://your-worker.workers.dev/api/regenerate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-token" \
+  -d '{"all": true}'
+```
+
+**Note**: This works because we store the original diff content in D1, allowing us to re-render with updated templates anytime.
+
 ## License
 
 MIT
