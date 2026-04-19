@@ -17,10 +17,23 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Check if running from correct directory
-if [ ! -f "packages/worker/wrangler.toml" ]; then
+if [ ! -d "packages/worker" ]; then
     echo -e "${RED}Error: Please run this script from the diff-share root directory${NC}"
     exit 1
 fi
+
+# Check if wrangler.toml exists, if not copy from example
+if [ ! -f "packages/worker/wrangler.toml" ]; then
+    if [ -f "packages/worker/wrangler.toml.example" ]; then
+        echo "Creating wrangler.toml from template..."
+        cp packages/worker/wrangler.toml.example packages/worker/wrangler.toml
+        echo -e "${GREEN}✓ Created wrangler.toml from template${NC}"
+    else
+        echo -e "${RED}Error: Neither wrangler.toml nor wrangler.toml.example found${NC}"
+        exit 1
+    fi
+fi
+echo ""
 
 # Check dependencies
 echo "Step 1: Checking dependencies..."
