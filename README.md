@@ -71,28 +71,40 @@ flowchart TB
 
 ## Usage
 
+> **Note**: Make sure you've built the CLI first (`bun run build` in `packages/cli`).
+
 ### CLI Commands
+
+Assuming your CLI is at `./packages/cli/dist/cli.js`:
 
 ```bash
 # Current uncommitted changes (working directory)
-diff-share
+./packages/cli/dist/cli.js
 
 # Specific commit
-diff-share --commit abc123
-diff-share -c HEAD~3
+./packages/cli/dist/cli.js --commit abc123
+./packages/cli/dist/cli.js -c HEAD~3
 
 # Compare two commits
-diff-share --from abc123 --to def456
-diff-share abc123..def456
+./packages/cli/dist/cli.js --from abc123 --to def456
+./packages/cli/dist/cli.js abc123..def456
 
 # Compare current branch with base branch
-diff-share --base main
+./packages/cli/dist/cli.js --base main
 
 # Staged changes only
-diff-share --staged
+./packages/cli/dist/cli.js --staged
 
 # With custom options
-diff-share --commit HEAD~5 --ttl 7d --title "Revert changes" --open
+./packages/cli/dist/cli.js --commit HEAD~5 --ttl 7d --title "Revert changes" --open
+```
+
+Or set an alias for convenience:
+```bash
+alias diff-share='./packages/cli/dist/cli.js'
+
+# Now you can use it directly
+diff-share --commit abc123
 ```
 
 ### CLI Options
@@ -150,28 +162,69 @@ diff-share/
 └── README.md
 ```
 
+## Quick Start
+
+### 1. Clone & Deploy
+
+```bash
+git clone git@github.com:KrabsWong/diff-share.git
+cd diff-share
+
+# One-command deployment
+./deploy.sh
+```
+
+The script will automatically:
+- Check and install dependencies (wrangler, bun)
+- Login to Cloudflare (opens browser)
+- Create D1 database and R2 bucket
+- Initialize database schema
+- Deploy Worker
+- Build CLI
+
+After deployment, you'll get your Worker URL (e.g., `https://diff-share-worker.xxx.workers.dev`).
+
+### 2. Build CLI
+
+```bash
+cd packages/cli
+
+# Build the CLI
+bun run build
+
+# The CLI binary is now at: ./dist/cli.js
+```
+
+### 3. Use CLI
+
+```bash
+# Set your API URL (replace with your actual Worker URL)
+export DIFF_SHARE_API_URL=https://diff-share-worker.xxx.workers.dev
+
+# Now you can use the CLI
+cd packages/cli
+./dist/cli.js --help
+
+# Examples
+./dist/cli.js                              # Share working directory changes
+./dist/cli.js --commit abc123              # Share specific commit
+./dist/cli.js abc123..def456               # Share range between commits
+./dist/cli.js --base main                  # Compare with main branch
+```
+
+**Tip**: Add to your shell profile for convenience:
+```bash
+echo 'export DIFF_SHARE_API_URL=https://diff-share-worker.xxx.workers.dev' >> ~/.zshrc
+```
+
+---
+
 ## Development
 
 ### Prerequisites
 
 - [Bun](https://bun.sh/) installed
-- Cloudflare account with Workers, R2, D1 enabled
-
-### Setup
-
-```bash
-# Install dependencies
-bun install
-
-# Configure Cloudflare credentials
-wrangler login
-
-# Create D1 database
-wrangler d1 create diff-share-db
-
-# Create R2 bucket
-wrangler r2 bucket create diff-share-files
-```
+- Cloudflare account
 
 ### Local Development
 
@@ -180,23 +233,15 @@ wrangler r2 bucket create diff-share-files
 cd packages/worker
 bun run dev
 
-# Test CLI (in another terminal)
+# Build and test CLI
 cd packages/cli
 bun run build
-./dist/cli upload --help
+./dist/cli.js --api-url http://localhost:8787
 ```
 
-### Deployment
+### Manual Deployment (if deploy.sh doesn't work)
 
-```bash
-# Deploy Worker
-cd packages/worker
-wrangler deploy
-
-# Publish CLI to npm (optional)
-cd packages/cli
-npm publish
-```
+See [DEPLOY.md](DEPLOY.md) for detailed manual deployment instructions.
 
 ## Expiration & Cleanup
 
