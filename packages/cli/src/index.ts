@@ -31,7 +31,7 @@ program
   .option('-o, --open', 'Auto-open in browser', false)
   .option('--copy', 'Copy link to clipboard', false)
   .option('--raw', 'Output raw URL only', false)
-  .option('--api-url <url>', 'API endpoint URL', 'https://diff-share-worker.your-account.workers.dev')
+  .option('--api-url <url>', 'API endpoint URL', 'https://diff-share-worker.<your-account>.workers.dev')
   .action(async (rangeArg: string | undefined, options: CLIOptions) => {
     try {
       const result = await handleUpload(rangeArg, options);
@@ -110,8 +110,11 @@ async function handleUpload(rangeArg: string | undefined, options: CLIOptions) {
   };
 
   // Upload
-  const apiUrl = options.apiUrl || process.env.DIFF_SHARE_API_URL || 'https://diff-share-worker.your-account.workers.dev';
-  
+  const apiUrl = options.apiUrl || process.env.DIFF_SHARE_API_URL;
+  if (!apiUrl) {
+    throw new Error('API URL is required. Set DIFF_SHARE_API_URL environment variable or use --api-url option.\nExample: export DIFF_SHARE_API_URL=https://diff-share-worker.<your-account>.workers.dev');
+  }
+
   const response = await fetch(`${apiUrl}/api/upload`, {
     method: 'POST',
     headers: {

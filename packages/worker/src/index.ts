@@ -6,6 +6,7 @@ export interface Env {
   DB: D1Database;
   DIFF_BUCKET: R2Bucket;
   ENVIRONMENT: string;
+  R2_PUBLIC_URL: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -75,7 +76,7 @@ app.post('/api/upload', async (c) => {
     ).run();
 
     // Generate URL
-    const url = generatePublicUrl(c.req.url, hash);
+    const url = generatePublicUrl(c.req.url, hash, c.env);
 
     return c.json<DiffUploadResponse>({
       success: true,
@@ -129,11 +130,11 @@ async function generateHash(diff: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
-function generatePublicUrl(requestUrl: string, hash: string): string {
-  const url = new URL(requestUrl);
-  // For production, use R2 public URL or custom domain
-  // For now, return a placeholder that will be replaced with actual R2/CDN URL
-  return `https://r2.diff-share.com/${hash}.html`;
+function generatePublicUrl(_requestUrl: string, hash: string, env: Env): string {
+  // Use R2 public URL from environment variable or construct from bucket
+  // Format: https://pub-<id>.r2.dev
+  const r2PublicUrl = env.R2_PUBLIC_URL || 'https://pub-xxxxxxxx.r2.dev';
+  return `${r2PublicUrl}/${hash}.html`;
 }
 
 function generateDiffPage(
