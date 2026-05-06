@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { DiffUploadRequest, DiffUploadResponse, DiffMetadata } from '../../../shared/types';
+import type { DiffUploadRequest, DiffUploadResponse } from '../../../shared/types';
+import { generateDiffPage } from './templates/diff-page';
 
 export interface Env {
   DB: D1Database;
@@ -53,7 +54,12 @@ app.post('/api/upload', async (c) => {
     const expireAt = new Date(now.getTime() + ttl * 60 * 60 * 1000);
 
     // Generate HTML
-    const html = generateDiffPage(body, hash, now, expireAt);
+    const html = generateDiffPage({
+      request: body,
+      hash,
+      createdAt: now,
+      expireAt,
+    });
 
     // Upload to R2
     await c.env.DIFF_BUCKET.put(`${hash}.html`, html, {
@@ -181,332 +187,8 @@ async function generateHash(diff: string): Promise<string> {
 }
 
 function generatePublicUrl(_requestUrl: string, hash: string, env: Env): string {
-  // Use R2 public URL from environment variable or construct from bucket
-  // Format: https://pub-<id>.r2.dev
   const r2PublicUrl = env.R2_PUBLIC_URL || 'https://pub-xxxxxxxx.r2.dev';
   return `${r2PublicUrl}/${hash}.html`;
-}
-
-function generateDiffPage(
-  request: DiffUploadRequest,
-  hash: string,
-  createdAt: Date,
-  expireAt: Date
-): string {
-  const { diff, mode, metadata } = request;
-  const title = metadata?.title || getDefaultTitle(mode, request.source);
-  // Escape diff content for safe insertion into JavaScript string
-  const escapedDiff = JSON.stringify(diff);
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)} - Diff Share</title>
-  <!-- diff2html CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/css/diff2html.min.css">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-      background: #ffffff;
-      color: #24292f;
-      line-height: 1.6;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .header {
-      background: #f6f8fa;
-      border-bottom: 1px solid #d0d7de;
-      padding: 1rem 2rem;
-    }
-    .header h1 {
-      font-size: 1.25rem;
-      color: #1f2328;
-      margin-bottom: 0.5rem;
-    }
-    .meta {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      font-size: 0.875rem;
-      color: #656d76;
-    }
-    .meta span {
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-    .badge {
-      background: #2da44e;
-      color: white;
-      padding: 0.125rem 0.5rem;
-      border-radius: 0.75rem;
-      font-size: 0.75rem;
-    }
-    .container {
-      flex: 1;
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 1rem;
-      width: 100%;
-    }
-    .info {
-      background: #f6f8fa;
-      border: 1px solid #d0d7de;
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-    .expires {
-      color: #cf222e;
-      font-size: 0.875rem;
-    }
-    .diff-wrapper {
-      background: #ffffff;
-      border: 1px solid #d0d7de;
-      border-radius: 0.5rem;
-      overflow: hidden;
-    }
-    /* Override diff2html styles for light theme */
-    .d2h-wrapper {
-      background: #ffffff;
-    }
-    .d2h-file-header {
-      background: #f6f8fa;
-      border-bottom: 1px solid #d0d7de;
-    }
-    .d2h-file-name {
-      color: #24292f;
-    }
-    
-    /* Side-by-side mode background */
-    .d2h-side-by-side {
-      background: #ffffff;
-    }
-    .d2h-side-by-side .d2h-code-side {
-      background: #ffffff;
-    }
-    .d2h-side-by-side .d2h-code-wrapper {
-      background: #ffffff;
-    }
-    
-    /* Left panel (original) background */
-    .d2h-side-by-side .d2h-code-side:first-child {
-      background: #ffffff;
-    }
-    
-    /* Right panel (modified) background */
-    .d2h-side-by-side .d2h-code-side:last-child {
-      background: #ffffff;
-    }
-    
-    /* Table cells in side-by-side mode */
-    .d2h-side-by-side td {
-      background: #ffffff;
-      color: #24292f;
-    }
-    
-    /* Code lines */
-    .d2h-code-line {
-      color: #24292f;
-      background: transparent;
-    }
-    .d2h-code-side-line {
-      color: #24292f;
-      background: transparent;
-    }
-    
-    /* Line numbers */
-    .d2h-code-linenumber {
-      background: #f6f8fa;
-      color: #656d76;
-      border-right: 1px solid #d0d7de;
-    }
-    
-    /* Info rows */
-    .d2h-info {
-      background: #ffffff;
-      color: #656d76;
-    }
-    
-    /* Deleted lines - light red background */
-    .d2h-del {
-      background-color: rgba(255, 200, 200, 0.4);
-    }
-    .d2h-del .d2h-code-linenumber {
-      background-color: rgba(255, 200, 200, 0.6);
-      border-right-color: rgba(207, 34, 46, 0.4);
-    }
-    
-    /* Inserted lines - light green background */
-    .d2h-ins {
-      background-color: rgba(200, 255, 200, 0.4);
-    }
-    .d2h-ins .d2h-code-linenumber {
-      background-color: rgba(200, 255, 200, 0.6);
-      border-right-color: rgba(45, 164, 78, 0.4);
-    }
-    
-    /* Inline changes */
-    .d2h-code-line del,
-    .d2h-code-side-line del {
-      background-color: rgba(255, 150, 150, 0.6);
-    }
-    .d2h-code-line ins,
-    .d2h-code-side-line ins {
-      background-color: rgba(150, 255, 150, 0.6);
-    }
-    
-    /* File wrapper */
-    .d2h-file-wrapper {
-      border: 1px solid #d0d7de;
-      border-radius: 0.375rem;
-      margin-bottom: 1rem;
-      background: #ffffff;
-    }
-    
-    .d2h-file-collapse {
-      display: none;
-    }
-    .view-toggle {
-      background: #f6f8fa;
-      border: 1px solid #d0d7de;
-      color: #24292f;
-      padding: 0.5rem 1rem;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      font-size: 0.875rem;
-      margin-bottom: 1rem;
-    }
-    .view-toggle:hover {
-      background: #e8ecf1;
-    }
-    .footer {
-      text-align: center;
-      padding: 1rem;
-      color: #656d76;
-      font-size: 0.875rem;
-      background: #f6f8fa;
-      border-top: 1px solid #d0d7de;
-    }
-    .footer a {
-      color: #58a6ff;
-      text-decoration: none;
-    }
-    @media (max-width: 768px) {
-      .container { padding: 0.5rem; }
-      .header { padding: 1rem; }
-      .meta { flex-direction: column; gap: 0.5rem; }
-    }
-  </style>
-</head>
-<body>
-  <header class="header">
-    <h1>${escapeHtml(title)}</h1>
-    <div class="meta">
-      <span><span class="badge">${mode}</span></span>
-      ${metadata?.repoName ? `<span>📁 ${escapeHtml(metadata.repoName)}</span>` : ''}
-      ${metadata?.branch ? `<span>🌿 ${escapeHtml(metadata.branch)}</span>` : ''}
-    </div>
-  </header>
-
-  <div class="container">
-    <div class="info">
-      <div>
-        <strong>Hash:</strong> <code>${hash}</code>
-        <span style="margin-left: 1rem;"><strong>Created:</strong> ${createdAt.toLocaleString()}</span>
-      </div>
-      <div class="expires">
-        ⏰ Expires: ${expireAt.toLocaleString()}
-      </div>
-    </div>
-
-    <button class="view-toggle" onclick="toggleView()">切换视图 (Side-by-side / Line-by-line)</button>
-
-    <div id="diff-container" class="diff-wrapper">
-      <div style="padding: 2rem; text-align: center; color: #656d76;">加载 diff...</div>
-    </div>
-  </div>
-
-  <footer class="footer">
-    Generated by <a href="https://github.com/KrabsWong/diff-share">Diff Share</a>
-  </footer>
-
-  <!-- diff2html JS -->
-  <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui.min.js"></script>
-  <script>
-    const diffString = ${escapedDiff};
-    let currentOutputFormat = 'side-by-side';
-
-    function renderDiff() {
-      const targetElement = document.getElementById('diff-container');
-      const configuration = {
-        drawFileList: true,
-        matching: 'lines',
-        matchWordsThreshold: 0.25,
-        maxLineSizeInBlockForComparison: 200,
-        outputFormat: currentOutputFormat,
-        synchronisedScroll: true,
-        highlight: true,
-        renderNothingWhenEmpty: false
-      };
-
-      const diff2htmlUi = new Diff2HtmlUI(targetElement, diffString, configuration);
-      diff2htmlUi.draw();
-    }
-
-    function toggleView() {
-      currentOutputFormat = currentOutputFormat === 'side-by-side' ? 'line-by-line' : 'side-by-side';
-      renderDiff();
-    }
-
-    // Initial render
-    renderDiff();
-  </script>
-</body>
-</html>`;
-}
-
-function formatDiff(diff: string): string {
-  return diff.split('\n').map(line => {
-    let className = '';
-    if (line.startsWith('+')) className = 'diff-add';
-    else if (line.startsWith('-')) className = 'diff-del';
-    else if (line.startsWith('@@')) className = 'diff-hunk';
-    else if (line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('---') || line.startsWith('+++')) className = 'diff-info';
-    
-    return `<div class="diff-line ${className}">${escapeHtml(line)}</div>`;
-  }).join('');
-}
-
-function escapeHtml(text: string): string {
-  const div = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  return text.replace(/[&<>"']/g, m => div[m as keyof typeof div]);
-}
-
-function getDefaultTitle(mode: string, source: DiffUploadRequest['source']): string {
-  switch (mode) {
-    case 'working':
-      return 'Uncommitted Changes';
-    case 'commit':
-      return `Commit ${source?.commit?.slice(0, 7)}`;
-    case 'range':
-      return `${source?.from?.slice(0, 7)}..${source?.to?.slice(0, 7)}`;
-    case 'base':
-      return `vs ${source?.base}`;
-    case 'staged':
-      return 'Staged Changes';
-    default:
-      return 'Git Diff';
-  }
 }
 
 async function cleanupExpired(env: Env): Promise<number> {
@@ -562,23 +244,25 @@ async function regenerateSingle(env: Env, hash: string): Promise<{ success: bool
     }
 
     // Reconstruct request object
-    const request: DiffUploadRequest = {
+    const request = {
       diff: row.diff_content,
-      mode: row.mode as DiffUploadRequest['mode'],
+      mode: row.mode,
+      source: {} as DiffUploadRequest['source'],
       metadata: {
         title: row.title || undefined,
         repoName: row.repo_name || undefined,
         branch: row.branch || undefined
-      }
+      },
+      ttl: 24,
     };
 
     // Regenerate HTML
-    const html = generateDiffPage(
+    const html = generateDiffPage({
       request,
-      row.hash,
-      new Date(row.created_at),
-      new Date(row.expire_at)
-    );
+      hash: row.hash,
+      createdAt: new Date(row.created_at),
+      expireAt: new Date(row.expire_at),
+    });
 
     // Upload to R2
     await env.DIFF_BUCKET.put(`${hash}.html`, html, {
